@@ -33,11 +33,21 @@ static bool settings_loaded = false;
 
 // Find the cursor scaler device (zip_xy_scaler)
 static const struct device *get_cursor_scaler_device(void) {
-    // In devicetree, the scaler is typically named "zip_xy_scaler"
-    // We'll search for it by compatible string
-    const struct device *dev = DEVICE_DT_GET_ANY(zmk_input_processor_scaler);
+    // Get the zip_xy_scaler device by label
+    const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(zip_xy_scaler));
     if (!device_is_ready(dev)) {
-        LOG_ERR("Cursor scaler device not ready");
+        LOG_ERR("Cursor scaler device (zip_xy_scaler) not ready");
+        return NULL;
+    }
+    return dev;
+}
+
+// Find the scroll scaler device (zip_scroll_scaler)
+static const struct device *get_scroll_scaler_device(void) {
+    // Get the zip_scroll_scaler device by label
+    const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(zip_scroll_scaler));
+    if (!device_is_ready(dev)) {
+        LOG_ERR("Scroll scaler device (zip_scroll_scaler) not ready");
         return NULL;
     }
     return dev;
@@ -78,9 +88,22 @@ int zmk_pointing_set_scroll_sensitivity(const struct zmk_pointing_sensitivity_sc
         return -EINVAL;
     }
 
-    // TODO: Implement scroll scaler override when available
+    const struct device *scaler_dev = get_scroll_scaler_device();
+    if (!scaler_dev) {
+        // If scroll scaler is not available, just store the setting
+        LOG_WRN("Scroll scaler device not available, storing setting only");
+        scroll_scale = *scale;
+        return 0;
+    }
+
+    int ret = zmk_input_processor_scaler_set_override(scaler_dev, scale->numerator, scale->denominator);
+    if (ret < 0) {
+        LOG_ERR("Failed to set scroll sensitivity: %d", ret);
+        return ret;
+    }
+
     scroll_scale = *scale;
-    LOG_INF("Scroll sensitivity set to %d/%d (persistence only)", scale->numerator, scale->denominator);
+    LOG_INF("Scroll sensitivity set to %d/%d", scale->numerator, scale->denominator);
     return 0;
 }
 
@@ -130,13 +153,24 @@ static int pointing_settings_commit(void) {
     settings_loaded = true;
 
     // Apply loaded cursor sensitivity
-    const struct device *scaler_dev = get_cursor_scaler_device();
-    if (scaler_dev) {
-        int ret = zmk_input_processor_scaler_set_override(scaler_dev, cursor_scale.numerator, cursor_scale.denominator);
+    const struct device *cursor_scaler_dev = get_cursor_scaler_device();
+    if (cursor_scaler_dev) {
+        int ret = zmk_input_processor_scaler_set_override(cursor_scaler_dev, cursor_scale.numerator, cursor_scale.denominator);
         if (ret < 0) {
             LOG_WRN("Failed to apply loaded cursor sensitivity: %d", ret);
         } else {
             LOG_INF("Applied cursor sensitivity: %d/%d", cursor_scale.numerator, cursor_scale.denominator);
+        }
+    }
+
+    // Apply loaded scroll sensitivity
+    const struct device *scroll_scaler_dev = get_scroll_scaler_device();
+    if (scroll_scaler_dev) {
+        int ret = zmk_input_processor_scaler_set_override(scroll_scaler_dev, scroll_scale.numerator, scroll_scale.denominator);
+        if (ret < 0) {
+            LOG_WRN("Failed to apply loaded scroll sensitivity: %d", ret);
+        } else {
+            LOG_INF("Applied scroll sensitivity: %d/%d", scroll_scale.numerator, scroll_scale.denominator);
         }
     }
 
@@ -195,10 +229,15 @@ int zmk_pointing_reset_settings(void) {
         return ret;
     }
 
-    // Clear runtime override
-    const struct device *scaler_dev = get_cursor_scaler_device();
-    if (scaler_dev) {
-        zmk_input_processor_scaler_clear_override(scaler_dev);
+    // Clear runtime overrides
+    const struct device *cursor_scaler_dev = get_cursor_scaler_device();
+    if (cursor_scaler_dev) {
+        zmk_input_processor_scaler_clear_override(cursor_scaler_dev);
+    }
+
+    const struct device *scroll_scaler_dev = get_scroll_scaler_device();
+    if (scroll_scaler_dev) {
+        zmk_input_processor_scaler_clear_override(scroll_scaler_dev);
     }
 
     LOG_INF("Pointing settings reset to defaults");
