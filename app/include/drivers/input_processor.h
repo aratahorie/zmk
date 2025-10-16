@@ -68,4 +68,8 @@ static inline int z_impl_zmk_input_processor_handle_event(const struct device *d
     return api->handle_event(dev, event, param1, param2, state);
 }
 
+// Scaler-specific runtime override API
+int zmk_input_processor_scaler_set_override(const struct device *dev, uint32_t numerator, uint32_t denominator);
+int zmk_input_processor_scaler_clear_override(const struct device *dev);
+
 #include <syscalls/input_processor.h>

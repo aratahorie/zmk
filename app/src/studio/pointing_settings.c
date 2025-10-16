@@ -1,0 +1,206 @@
+/*
+ * Copyright (c) 2024 The ZMK Contributors
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/settings/settings.h>
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_DECLARE(zmk_studio, CONFIG_ZMK_STUDIO_LOG_LEVEL);
+
+#include <zmk/studio/pointing.h>
+#include <drivers/input_processor.h>
+
+#define POINTING_SETTINGS_PREFIX "pointing"
+#define CURSOR_SCALE_KEY "cursor_scale"
+#define SCROLL_SCALE_KEY "scroll_scale"
+
+// Current runtime settings
+static struct zmk_pointing_sensitivity_scale cursor_scale = {
+    .numerator = 1,
+    .denominator = 1,
+};
+
+static struct zmk_pointing_sensitivity_scale scroll_scale = {
+    .numerator = 1,
+    .denominator = 1,
+};
+
+static bool settings_loaded = false;
+
+// Find the cursor scaler device (zip_xy_scaler)
+static const struct device *get_cursor_scaler_device(void) {
+    // In devicetree, the scaler is typically named "zip_xy_scaler"
+    // We'll search for it by compatible string
+    const struct device *dev = DEVICE_DT_GET_ANY(zmk_input_processor_scaler);
+    if (!device_is_ready(dev)) {
+        LOG_ERR("Cursor scaler device not ready");
+        return NULL;
+    }
+    return dev;
+}
+
+int zmk_pointing_set_cursor_sensitivity(const struct zmk_pointing_sensitivity_scale *scale) {
+    if (!scale || scale->denominator == 0) {
+        return -EINVAL;
+    }
+
+    const struct device *scaler_dev = get_cursor_scaler_device();
+    if (!scaler_dev) {
+        return -ENODEV;
+    }
+
+    int ret = zmk_input_processor_scaler_set_override(scaler_dev, scale->numerator, scale->denominator);
+    if (ret < 0) {
+        LOG_ERR("Failed to set cursor sensitivity: %d", ret);
+        return ret;
+    }
+
+    cursor_scale = *scale;
+    LOG_INF("Cursor sensitivity set to %d/%d", scale->numerator, scale->denominator);
+    return 0;
+}
+
+int zmk_pointing_get_cursor_sensitivity(struct zmk_pointing_sensitivity_scale *scale) {
+    if (!scale) {
+        return -EINVAL;
+    }
+
+    *scale = cursor_scale;
+    return 0;
+}
+
+int zmk_pointing_set_scroll_sensitivity(const struct zmk_pointing_sensitivity_scale *scale) {
+    if (!scale || scale->denominator == 0) {
+        return -EINVAL;
+    }
+
+    // TODO: Implement scroll scaler override when available
+    scroll_scale = *scale;
+    LOG_INF("Scroll sensitivity set to %d/%d (persistence only)", scale->numerator, scale->denominator);
+    return 0;
+}
+
+int zmk_pointing_get_scroll_sensitivity(struct zmk_pointing_sensitivity_scale *scale) {
+    if (!scale) {
+        return -EINVAL;
+    }
+
+    *scale = scroll_scale;
+    return 0;
+}
+
+// Settings callbacks
+static int pointing_settings_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg) {
+    const char *next;
+
+    if (settings_name_steq(name, CURSOR_SCALE_KEY, &next) && !next) {
+        if (len != sizeof(struct zmk_pointing_sensitivity_scale)) {
+            return -EINVAL;
+        }
+
+        int rc = read_cb(cb_arg, &cursor_scale, sizeof(cursor_scale));
+        if (rc >= 0) {
+            LOG_INF("Loaded cursor scale: %d/%d", cursor_scale.numerator, cursor_scale.denominator);
+            return 0;
+        }
+        return rc;
+    }
+
+    if (settings_name_steq(name, SCROLL_SCALE_KEY, &next) && !next) {
+        if (len != sizeof(struct zmk_pointing_sensitivity_scale)) {
+            return -EINVAL;
+        }
+
+        int rc = read_cb(cb_arg, &scroll_scale, sizeof(scroll_scale));
+        if (rc >= 0) {
+            LOG_INF("Loaded scroll scale: %d/%d", scroll_scale.numerator, scroll_scale.denominator);
+            return 0;
+        }
+        return rc;
+    }
+
+    return -ENOENT;
+}
+
+static int pointing_settings_commit(void) {
+    settings_loaded = true;
+
+    // Apply loaded cursor sensitivity
+    const struct device *scaler_dev = get_cursor_scaler_device();
+    if (scaler_dev) {
+        int ret = zmk_input_processor_scaler_set_override(scaler_dev, cursor_scale.numerator, cursor_scale.denominator);
+        if (ret < 0) {
+            LOG_WRN("Failed to apply loaded cursor sensitivity: %d", ret);
+        } else {
+            LOG_INF("Applied cursor sensitivity: %d/%d", cursor_scale.numerator, cursor_scale.denominator);
+        }
+    }
+
+    return 0;
+}
+
+SETTINGS_STATIC_HANDLER_DEFINE(pointing, POINTING_SETTINGS_PREFIX, NULL, pointing_settings_set, pointing_settings_commit, NULL);
+
+int zmk_pointing_save_settings(void) {
+    int ret;
+
+    ret = settings_save_one(POINTING_SETTINGS_PREFIX "/" CURSOR_SCALE_KEY, &cursor_scale, sizeof(cursor_scale));
+    if (ret < 0) {
+        LOG_ERR("Failed to save cursor scale: %d", ret);
+        return ret;
+    }
+
+    ret = settings_save_one(POINTING_SETTINGS_PREFIX "/" SCROLL_SCALE_KEY, &scroll_scale, sizeof(scroll_scale));
+    if (ret < 0) {
+        LOG_ERR("Failed to save scroll scale: %d", ret);
+        return ret;
+    }
+
+    LOG_INF("Pointing settings saved");
+    return 0;
+}
+
+int zmk_pointing_load_settings(void) {
+    if (!settings_loaded) {
+        LOG_WRN("Settings not yet loaded by subsystem");
+        return -EAGAIN;
+    }
+
+    return 0;
+}
+
+int zmk_pointing_reset_settings(void) {
+    int ret;
+
+    // Reset to defaults
+    cursor_scale.numerator = 1;
+    cursor_scale.denominator = 1;
+    scroll_scale.numerator = 1;
+    scroll_scale.denominator = 1;
+
+    // Delete from storage
+    ret = settings_delete(POINTING_SETTINGS_PREFIX "/" CURSOR_SCALE_KEY);
+    if (ret < 0 && ret != -ENOENT) {
+        LOG_ERR("Failed to delete cursor scale: %d", ret);
+        return ret;
+    }
+
+    ret = settings_delete(POINTING_SETTINGS_PREFIX "/" SCROLL_SCALE_KEY);
+    if (ret < 0 && ret != -ENOENT) {
+        LOG_ERR("Failed to delete scroll scale: %d", ret);
+        return ret;
+    }
+
+    // Clear runtime override
+    const struct device *scaler_dev = get_cursor_scaler_device();
+    if (scaler_dev) {
+        zmk_input_processor_scaler_clear_override(scaler_dev);
+    }
+
+    LOG_INF("Pointing settings reset to defaults");
+    return 0;
+}
