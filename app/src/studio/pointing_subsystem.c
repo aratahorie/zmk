@@ -11,26 +11,21 @@ LOG_MODULE_DECLARE(zmk_studio, CONFIG_ZMK_STUDIO_LOG_LEVEL);
 #include <zmk/studio/pointing.h>
 #include <zmk/studio/rpc.h>
 
-// TODO: Once protobuf definitions are added to zmk-studio-messages, uncomment this
-// ZMK_RPC_SUBSYSTEM(pointing)
+ZMK_RPC_SUBSYSTEM(pointing)
 
-// TODO: This will be defined in the protobuf when ready
-// #define POINTING_RESPONSE(type, ...) ZMK_RPC_RESPONSE(pointing, type, __VA_ARGS__)
+#define POINTING_RESPONSE(type, ...) ZMK_RPC_RESPONSE(pointing, type, __VA_ARGS__)
 
 /*
  * RPC Handler: set_sensitivity
  *
- * TODO: Implement once protobuf schema is ready
- *
- * This handler should:
- * 1. Parse the SetSensitivityRequest from the RPC
- * 2. Validate numerator and denominator (non-zero, reasonable range)
- * 3. Call zmk_pointing_set_cursor_sensitivity() with the cursor scale
- * 4. Optionally call zmk_pointing_set_scroll_sensitivity() if provided
- * 5. Call zmk_pointing_save_settings() to persist
- * 6. Return SetSensitivityResponse with ok=true or error code
+ * This handler:
+ * 1. Parses the SetSensitivityRequest from the RPC
+ * 2. Validates numerator and denominator (non-zero, reasonable range)
+ * 3. Calls zmk_pointing_set_cursor_sensitivity() with the cursor scale
+ * 4. Optionally calls zmk_pointing_set_scroll_sensitivity() if provided
+ * 5. Calls zmk_pointing_save_settings() to persist
+ * 6. Returns SetSensitivityResponse with ok=true or error code
  */
-#if 0
 zmk_studio_Response set_sensitivity(const zmk_studio_Request *req) {
     LOG_DBG("set_sensitivity RPC called");
     const zmk_pointing_SetSensitivityRequest *set_req =
@@ -87,19 +82,15 @@ zmk_studio_Response set_sensitivity(const zmk_studio_Request *req) {
         .result = {.ok = true}
     });
 }
-#endif
 
 /*
  * RPC Handler: get_sensitivity (optional)
  *
- * TODO: Implement once protobuf schema is ready
- *
- * This handler should:
- * 1. Call zmk_pointing_get_cursor_sensitivity() to get current cursor scale
- * 2. Call zmk_pointing_get_scroll_sensitivity() to get current scroll scale
- * 3. Return GetSensitivityResponse with current values
+ * This handler:
+ * 1. Calls zmk_pointing_get_cursor_sensitivity() to get current cursor scale
+ * 2. Calls zmk_pointing_get_scroll_sensitivity() to get current scroll scale
+ * 3. Returns GetSensitivityResponse with current values
  */
-#if 0
 zmk_studio_Response get_sensitivity(const zmk_studio_Request *req) {
     LOG_DBG("get_sensitivity RPC called");
 
@@ -116,11 +107,10 @@ zmk_studio_Response get_sensitivity(const zmk_studio_Request *req) {
 
     return POINTING_RESPONSE(get_sensitivity, resp);
 }
-#endif
 
-// TODO: Register RPC handlers once protobuf is ready
-// ZMK_RPC_SUBSYSTEM_HANDLER(pointing, set_sensitivity, ZMK_STUDIO_RPC_HANDLER_SECURED);
-// ZMK_RPC_SUBSYSTEM_HANDLER(pointing, get_sensitivity, ZMK_STUDIO_RPC_HANDLER_UNSECURED);
+// Register RPC handlers
+ZMK_RPC_SUBSYSTEM_HANDLER(pointing, set_sensitivity, ZMK_STUDIO_RPC_HANDLER_SECURED);
+ZMK_RPC_SUBSYSTEM_HANDLER(pointing, get_sensitivity, ZMK_STUDIO_RPC_HANDLER_UNSECURED);
 
 /*
  * Settings reset callback
