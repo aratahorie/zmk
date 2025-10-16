@@ -62,6 +62,12 @@ static int scaler_handle_event(const struct device *dev, struct input_event *eve
             // Use override parameters if enabled, otherwise use devicetree params
             uint32_t mul = (data && data->override_enabled) ? data->override_mul : param1;
             uint32_t div = (data && data->override_enabled) ? data->override_div : param2;
+
+            LOG_DBG("Scaler %s: override=%d, using %d/%d (dt: %d/%d)",
+                    dev->name,
+                    (data && data->override_enabled) ? 1 : 0,
+                    mul, div, param1, param2);
+
             return scale_val(event, mul, div, state);
         }
     }

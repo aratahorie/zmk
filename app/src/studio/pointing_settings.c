@@ -35,10 +35,12 @@ static bool settings_loaded = false;
 static const struct device *get_cursor_scaler_device(void) {
     // Get the zip_xy_scaler device by label
     const struct device *dev = DEVICE_DT_GET(DT_NODELABEL(zip_xy_scaler));
+    LOG_INF("Cursor scaler device: %p, name: %s", dev, dev ? dev->name : "NULL");
     if (!device_is_ready(dev)) {
         LOG_ERR("Cursor scaler device (zip_xy_scaler) not ready");
         return NULL;
     }
+    LOG_INF("Cursor scaler device is ready");
     return dev;
 }
 
@@ -54,23 +56,28 @@ static const struct device *get_scroll_scaler_device(void) {
 }
 
 int zmk_pointing_set_cursor_sensitivity(const struct zmk_pointing_sensitivity_scale *scale) {
+    LOG_INF("zmk_pointing_set_cursor_sensitivity called: %d/%d", scale ? scale->numerator : 0, scale ? scale->denominator : 0);
+
     if (!scale || scale->denominator == 0) {
+        LOG_ERR("Invalid scale parameters");
         return -EINVAL;
     }
 
     const struct device *scaler_dev = get_cursor_scaler_device();
     if (!scaler_dev) {
+        LOG_ERR("Failed to get cursor scaler device");
         return -ENODEV;
     }
 
+    LOG_INF("About to set override on device %p: %d/%d", scaler_dev, scale->numerator, scale->denominator);
     int ret = zmk_input_processor_scaler_set_override(scaler_dev, scale->numerator, scale->denominator);
     if (ret < 0) {
-        LOG_ERR("Failed to set cursor sensitivity: %d", ret);
+        LOG_ERR("Failed to set cursor sensitivity override: %d", ret);
         return ret;
     }
 
     cursor_scale = *scale;
-    LOG_INF("Cursor sensitivity set to %d/%d", scale->numerator, scale->denominator);
+    LOG_INF("Cursor sensitivity successfully set to %d/%d", scale->numerator, scale->denominator);
     return 0;
 }
 
