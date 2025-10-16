@@ -36,7 +36,7 @@ manifest:
       path: modules/lib/nanopb
       remote: zmkfirmware
     - name: zmk-studio-messages
-      revision: ee14b40e2eb81ca80432c9a61fc763d8d3932196
+      revision: ff42866cd8dc1212ed25d81a3fc06857ffad769c
       path: modules/msgs/zmk-studio-messages
       remote: aratahorie
   self:
